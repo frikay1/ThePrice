@@ -401,6 +401,20 @@ class ProductApiTest extends TestCase
         }
     }
 
+    public function test_cors_preflight_allows_native_android_mobile_auth(): void
+    {
+        $this->withHeaders([
+            'Origin' => 'https://localhost',
+            'Access-Control-Request-Method' => 'POST',
+            'Access-Control-Request-Headers' => 'authorization,content-type',
+        ])->options('/api/auth/mobile-login')
+            ->assertNoContent()
+            ->assertHeader('Access-Control-Allow-Origin', 'https://localhost')
+            ->assertHeader('Access-Control-Allow-Credentials', 'true')
+            ->assertHeader('Access-Control-Allow-Methods', 'POST')
+            ->assertHeader('Access-Control-Allow-Headers', 'authorization,content-type');
+    }
+
     public function test_products_can_be_listed_retrieved_and_deleted(): void
     {
         $creation = $this->postJson('/api/products', [
