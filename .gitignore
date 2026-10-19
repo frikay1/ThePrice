@@ -1,0 +1,53 @@
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!frontend/.env.production
+**/.env
+**/.env.*
+!**/.env.example
+!frontend/.env.production
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+auth.json
+
+# Dependencies and generated assets
+backend/vendor/
+frontend/node_modules/
+frontend/dist/
+frontend/android/.gradle/
+frontend/android/**/build/
+frontend/android/app/src/main/assets/public/
+frontend/android/app/src/main/assets/capacitor.config.json
+frontend/android/app/src/main/assets/capacitor.plugins.json
+frontend/android/local.properties
+frontend/android/capacitor-cordova-android-plugins/
+frontend/android/.idea/
+frontend/android/*.iml
+
+# Local Laravel runtime and database
+backend/storage/logs/*
+!backend/storage/logs/.gitignore
+backend/storage/framework/cache/data/*
+!backend/storage/framework/cache/data/.gitignore
+backend/storage/framework/sessions/*
+!backend/storage/framework/sessions/.gitignore
+backend/storage/framework/views/*
+!backend/storage/framework/views/.gitignore
+backend/bootstrap/cache/*.php
+!backend/bootstrap/cache/.gitignore
+backend/database/*.sqlite
+backend/database/*.sqlite-*
+
+# IDE, OS, and temporary files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+.idea/
+.vscode/
