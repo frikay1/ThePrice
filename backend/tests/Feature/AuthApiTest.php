@@ -125,6 +125,18 @@ class AuthApiTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
+    public function test_mobile_login_validation_errors_keep_json_status_and_cors_headers(): void
+    {
+        $this->withHeaders([
+            'Origin' => 'https://localhost',
+            'Accept' => 'application/json',
+        ])->postJson('/api/auth/mobile-login', [])
+            ->assertUnprocessable()
+            ->assertHeader('Content-Type', 'application/json')
+            ->assertHeader('Access-Control-Allow-Origin', 'https://localhost')
+            ->assertJsonValidationErrors(['email', 'password']);
+    }
+
     public function test_mobile_registration_returns_a_token_without_creating_a_web_session(): void
     {
         $response = $this->withHeader('Origin', 'https://localhost')
