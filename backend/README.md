@@ -70,10 +70,14 @@ The frontend origin must be listed in `CORS_ALLOWED_ORIGINS` and
 `APP_URL` on `localhost`; do not open the frontend as `127.0.0.1` while the API
 uses `localhost`, because those hosts are different cookie sites.
 
-Capacitor authentication is not implemented yet. When added, it should use
-Sanctum personal access tokens (30-day maximum lifetime by default) stored only
-in the platform's secure credential storage, not `localStorage`; the published
-Sanctum token-table migration is pending with the product-ownership migration.
+Capacitor uses Sanctum personal access tokens, stored in native secure storage
+and sent as bearer tokens. With `androidScheme: "https"`, the Android WebView
+origin is `https://localhost`; the API allows that origin in `config/cors.php`.
+Laravel's global CORS middleware returns the CORS headers for API responses and
+preflight requests. The Docker image explicitly allows the public document
+root's `.htaccess` rules, which Apache needs to route those requests to Laravel
+and forward the `Authorization` header. It also normalizes the entrypoint's
+line endings so images built from Windows checkouts start correctly.
 
 The ownership migration adds a nullable `products.user_id` foreign key. It
 does not assign or remove existing products. Rows whose `user_id` remains

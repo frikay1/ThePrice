@@ -95,7 +95,9 @@ class AuthApiTest extends TestCase
                 'email' => 'ANDROID@example.com',
                 'password' => 'password123',
             ])->assertOk()
-            ->assertJsonPath('data.id', $user->id);
+            ->assertJsonPath('data.id', $user->id)
+            ->assertHeader('Access-Control-Allow-Origin', 'https://localhost')
+            ->assertHeader('Content-Type', 'application/json');
 
         $token = $response->json('token');
         $this->assertIsString($token);
