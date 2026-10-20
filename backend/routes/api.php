@@ -5,6 +5,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductLookupController;
 use App\Http\Controllers\ProductManualPriceController;
 use App\Http\Controllers\ProductRefreshController;
+use App\Http\Middleware\EnsureStatefulWebSessionForProductRequests;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
@@ -27,15 +28,19 @@ Route::prefix('auth')->group(function () {
     });
 });
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/products', [ProductController::class, 'index']);
-    Route::post('/products', [ProductController::class, 'store']);
-    Route::patch('/products/{product}', [ProductController::class, 'update'])->whereNumber('product');
-    Route::get('/products/{product}/history', [ProductController::class, 'history'])->whereNumber('product');
-    Route::post('/products/{product}/refresh', ProductRefreshController::class)->whereNumber('product');
-    Route::post('/products/{product}/manual-price', ProductManualPriceController::class)->whereNumber('product');
-    Route::patch('/products/{product}/target', [ProductController::class, 'updateTarget'])->whereNumber('product');
-    Route::patch('/products/{product}/variant', [ProductController::class, 'updateVariant'])->whereNumber('product');
-    Route::get('/products/{product}', [ProductController::class, 'show'])->whereNumber('product');
-    Route::delete('/products/{product}', [ProductController::class, 'destroy'])->whereNumber('product');
-});
+Route::withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+    ->middleware(EnsureStatefulWebSessionForProductRequests::class)
+    ->group(function () {
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('/products', [ProductController::class, 'index']);
+            Route::post('/products', [ProductController::class, 'store']);
+            Route::patch('/products/{product}', [ProductController::class, 'update'])->whereNumber('product');
+            Route::get('/products/{product}/history', [ProductController::class, 'history'])->whereNumber('product');
+            Route::post('/products/{product}/refresh', ProductRefreshController::class)->whereNumber('product');
+            Route::post('/products/{product}/manual-price', ProductManualPriceController::class)->whereNumber('product');
+            Route::patch('/products/{product}/target', [ProductController::class, 'updateTarget'])->whereNumber('product');
+            Route::patch('/products/{product}/variant', [ProductController::class, 'updateVariant'])->whereNumber('product');
+            Route::get('/products/{product}', [ProductController::class, 'show'])->whereNumber('product');
+            Route::delete('/products/{product}', [ProductController::class, 'destroy'])->whereNumber('product');
+        });
+    });

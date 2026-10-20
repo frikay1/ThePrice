@@ -137,6 +137,45 @@ class AuthApiTest extends TestCase
             ->assertJsonValidationErrors(['email', 'password']);
     }
 
+    public function test_mobile_bearer_user_can_save_product_without_session_csrf(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('android')->plainTextToken;
+
+        $response = $this->withHeaders(['Origin' => 'https://localhost'])
+            ->withToken($token)
+            ->postJson('/api/products', [
+                'name' => 'Audífonos',
+                'store' => 'Tienda de prueba',
+                'url' => 'https://example.com/product',
+                'current_price' => 1299,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.name', 'Audífonos')
+            ->assertJsonPath('data.user_id', $user->id);
+
+        $this->assertDatabaseHas('products', [
+            'name' => 'Audífonos',
+            'user_id' => $user->id,
+        ]);
+        $this->assertDatabaseCount('price_histories', 1);
+    }
+
+    public function test_mobile_product_creation_without_bearer_token_returns_unauthorized(): void
+    {
+        $this->withHeaders(['Origin' => 'https://localhost'])
+            ->postJson('/api/products', [
+                'name' => 'Audífonos',
+                'store' => 'Tienda de prueba',
+                'url' => 'https://example.com/product',
+                'current_price' => 1299,
+            ])
+            ->assertUnauthorized();
+
+        $this->assertDatabaseCount('products', 0);
+    }
+
     public function test_mobile_registration_returns_a_token_without_creating_a_web_session(): void
     {
         $response = $this->withHeader('Origin', 'https://localhost')

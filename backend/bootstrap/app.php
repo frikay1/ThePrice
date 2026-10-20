@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureStatefulWebSessionForProductRequests;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        $middleware->prependToPriorityList(
+            AuthenticatesRequests::class,
+            EnsureStatefulWebSessionForProductRequests::class
+        );
         $middleware->trustProxies(
             at: '*',
             headers: Request::HEADER_X_FORWARDED_FOR
@@ -30,7 +36,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request, Throwable $exception): bool =>
-                $request->is('api/*') || $request->expectsJson()
+            fn (Request $request, Throwable $exception): bool => $request->is('api/*') || $request->expectsJson()
         );
     })->create();
