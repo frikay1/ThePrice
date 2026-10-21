@@ -14,6 +14,7 @@ import { getProductHistory, lookupProduct } from './services/productApi'
 import { detectStore, validateProductUrl } from './services/storeDetection'
 import { readGuestProducts } from './services/guestProducts'
 import { readRecentProductVisits, recordRecentProductVisit } from './services/recentProducts'
+import { HtmlVisualInspector } from './components/inspector/HtmlVisualInspector'
 import './App.css'
 
 const formatPrice = (price: number, currency = 'MXN') => {
@@ -215,27 +216,27 @@ function ChartPanel({ history, currency }: { history: PricePoint[]; currency: st
         ? <p className="chart-empty">No hay registros en este periodo.</p>
         : points.length === 1
           ? <><div className="detail-chart">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={points} margin={{ top: 12, right: 4, left: -20, bottom: 0 }}>
-                  <CartesianGrid stroke="#F0E7EA" strokeDasharray="3 5" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} tickFormatter={(value: number) => formatPrice(value, currency)} width={82} />
-                  <Tooltip formatter={(value) => [formatPrice(Number(value), currency), 'Precio']} />
-                  <Line type="monotone" dataKey="price" stroke="#A85D7A" strokeWidth={2.5} dot={{ r: 5, fill: '#A85D7A' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div><p className="chart-empty">Solo existe un registro. Todavía no hay suficiente historial para mostrar una tendencia.</p></>
-      : <div className="detail-chart">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 12, right: 4, left: -20, bottom: 0 }}>
-          <CartesianGrid stroke="#F0E7EA" strokeDasharray="3 5" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} minTickGap={18} />
-          <YAxis tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} tickFormatter={(value: number) => formatPrice(value, currency)} width={82} />
-          <Tooltip formatter={(value) => [formatPrice(Number(value), currency), 'Precio']} contentStyle={{ borderRadius: 12, borderColor: '#F0E7EA', fontSize: 12 }} />
-          <Line type="monotone" dataKey="price" stroke="#A85D7A" strokeWidth={2.5} dot={{ r: 3, fill: '#A85D7A', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>}
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={points} margin={{ top: 12, right: 4, left: -20, bottom: 0 }}>
+                <CartesianGrid stroke="#F0E7EA" strokeDasharray="3 5" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} tickFormatter={(value: number) => formatPrice(value, currency)} width={82} />
+                <Tooltip formatter={(value) => [formatPrice(Number(value), currency), 'Precio']} />
+                <Line type="monotone" dataKey="price" stroke="#A85D7A" strokeWidth={2.5} dot={{ r: 5, fill: '#A85D7A' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div><p className="chart-empty">Solo existe un registro. Todavía no hay suficiente historial para mostrar una tendencia.</p></>
+          : <div className="detail-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={points} margin={{ top: 12, right: 4, left: -20, bottom: 0 }}>
+                <CartesianGrid stroke="#F0E7EA" strokeDasharray="3 5" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} minTickGap={18} />
+                <YAxis tick={{ fontSize: 10, fill: '#8D858B' }} tickLine={false} axisLine={false} tickFormatter={(value: number) => formatPrice(value, currency)} width={82} />
+                <Tooltip formatter={(value) => [formatPrice(Number(value), currency), 'Precio']} contentStyle={{ borderRadius: 12, borderColor: '#F0E7EA', fontSize: 12 }} />
+                <Line type="monotone" dataKey="price" stroke="#A85D7A" strokeWidth={2.5} dot={{ r: 3, fill: '#A85D7A', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>}
   </section>
 }
 
@@ -427,20 +428,20 @@ function ProductDetailPage() {
     <a className="store-link" href={product.sourceUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} /> Ver en tienda <ArrowRight size={16} /></a>
     {!isEditingDetails
       ? <button className="text-button edit-product-button" onClick={() => {
-          setEditName(product.name)
-          setEditStore(product.store)
-          setEditUrl(product.sourceUrl)
-          setEditImage(product.image ?? '')
-          setIsEditingDetails(true)
-        }}>Editar producto</button>
+        setEditName(product.name)
+        setEditStore(product.store)
+        setEditUrl(product.sourceUrl)
+        setEditImage(product.image ?? '')
+        setIsEditingDetails(true)
+      }}>Editar producto</button>
       : <form className="form-card product-edit-form" onSubmit={event => void saveDetails(event)}>
-          <h2>Editar datos del producto</h2>
-          <label>Nombre<input required maxLength={255} value={editName} onChange={event => setEditName(event.target.value)} /></label>
-          <label>Tienda<input required maxLength={255} value={editStore} onChange={event => setEditStore(event.target.value)} /></label>
-          <label>Enlace HTTPS<input required type="url" value={editUrl} onChange={event => setEditUrl(event.target.value)} /></label>
-          <label>Imagen HTTPS (opcional)<input type="url" value={editImage} onChange={event => setEditImage(event.target.value)} /></label>
-          <div className="manual-price-actions"><button className="primary-button" type="submit" disabled={isSavingDetails}>{isSavingDetails ? 'Guardando…' : 'Guardar cambios'}</button><button className="secondary-button" type="button" disabled={isSavingDetails} onClick={() => setIsEditingDetails(false)}>Cancelar</button></div>
-        </form>}
+        <h2>Editar datos del producto</h2>
+        <label>Nombre<input required maxLength={255} value={editName} onChange={event => setEditName(event.target.value)} /></label>
+        <label>Tienda<input required maxLength={255} value={editStore} onChange={event => setEditStore(event.target.value)} /></label>
+        <label>Enlace HTTPS<input required type="url" value={editUrl} onChange={event => setEditUrl(event.target.value)} /></label>
+        <label>Imagen HTTPS (opcional)<input type="url" value={editImage} onChange={event => setEditImage(event.target.value)} /></label>
+        <div className="manual-price-actions"><button className="primary-button" type="submit" disabled={isSavingDetails}>{isSavingDetails ? 'Guardando…' : 'Guardar cambios'}</button><button className="secondary-button" type="button" disabled={isSavingDetails} onClick={() => setIsEditingDetails(false)}>Cancelar</button></div>
+      </form>}
     <div className="detail-info-grid">
       <div><span>Variante seleccionada</span>{isEditingVariant ? <div className="target-edit"><input maxLength={255} value={variantInput} onChange={event => setVariantInput(event.target.value)} aria-label="Variante seleccionada" placeholder="Ej. Individual" /><button disabled={isSavingVariant} onClick={() => void saveVariant()} aria-label="Guardar variante">{isSavingVariant ? <span className="spinner" /> : <Check size={17} />}</button></div> : <strong>{product.variantName || 'Sin especificar'} <button className="inline-edit" onClick={() => { setVariantInput(product.variantName ?? ''); setIsEditingVariant(true) }}>Editar</button></strong>}</div>
       <div><span>Precio objetivo</span>{editingTarget ? <div className="target-edit"><input type="number" min="0.01" step="0.01" inputMode="decimal" value={target} onChange={e => setTarget(e.target.value)} aria-label="Precio objetivo" placeholder="Vacío para quitar" /><button disabled={isSavingTarget} onClick={() => void saveTarget()} aria-label="Guardar objetivo">{isSavingTarget ? <span className="spinner" /> : <Check size={17} />}</button></div> : <strong>{product.targetPrice === null ? 'Sin definir' : formatPrice(product.targetPrice, product.currency)} <button className="inline-edit" onClick={() => { setTarget(product.targetPrice === null ? '' : String(product.targetPrice)); setEditingTarget(true) }}>Editar</button></strong>}</div>
@@ -514,7 +515,7 @@ function AddProductPage() {
   const [store, setStore] = useState('')
   const [price, setPrice] = useState('')
   const [targetPrice, setTargetPrice] = useState('')
-  const currency = 'MXN'
+  const [currency, setCurrency] = useState('MXN')
   const [variantName, setVariantName] = useState('')
   const [image, setImage] = useState('')
   const [alertEnabled, setAlertEnabled] = useState(true)
@@ -523,7 +524,6 @@ function AddProductPage() {
   const [hasLookupData, setHasLookupData] = useState(false)
   const [productHtml, setProductHtml] = useState<string | null>(null)
   const [isHtmlVisible, setIsHtmlVisible] = useState(false)
-  const [htmlCopyMessage, setHtmlCopyMessage] = useState('')
   const [htmlTruncated, setHtmlTruncated] = useState(false)
 
   const updateUrl = (value: string) => {
@@ -534,11 +534,11 @@ function AddProductPage() {
     setHasLookupData(false)
     setProductHtml(null)
     setIsHtmlVisible(false)
-    setHtmlCopyMessage('')
     setHtmlTruncated(false)
     setName('')
     setStore('')
     setPrice('')
+    setCurrency('MXN')
     setTargetPrice('')
     setVariantName('')
     setImage('')
@@ -556,12 +556,11 @@ function AddProductPage() {
     setError(''); setNotice('')
     setProductHtml(null)
     setIsHtmlVisible(false)
-    setHtmlCopyMessage('')
     setHtmlTruncated(false)
     const validatedUrl = validateProductUrl(url)
     if (!validatedUrl.valid) { setError(validatedUrl.message); return }
     const host = new URL(validatedUrl.url).hostname.toLowerCase()
-    if (host === 'books.toscrape.com') {
+    if (host === 'books.toscrape.com' || host === 'amazon.com.mx' || host === 'www.amazon.com.mx') {
       setIsLoading(true)
       setValidUrl(validatedUrl.url)
       setHasLookupData(false)
@@ -570,9 +569,15 @@ function AddProductPage() {
         setName(result.name)
         setStore(result.store)
         setImage(result.image ?? '')
+        setPrice(String(result.current_price))
+        setCurrency(result.currency)
+        setHasLookupData(true)
         setProductHtml(result.html ?? null)
         setHtmlTruncated(result.html_truncated ?? false)
-        setNotice(result.notice)
+        if (result.html) {
+          setIsHtmlVisible(true)
+        }
+        setNotice(result.availability ? `${result.notice} Disponibilidad: ${result.availability}` : result.notice)
       } catch (caught) {
         setNotice(caught instanceof Error ? caught.message : 'Precio no disponible. Completa los datos manualmente.')
       } finally {
@@ -640,7 +645,7 @@ function AddProductPage() {
         <label>Nombre del producto<input required value={name} onChange={e => setName(e.target.value)} placeholder="Ej. Audífonos inalámbricos" /></label>
         <label>Tienda<input required value={store} onChange={e => setStore(e.target.value)} placeholder="Ej. Liverpool" /></label>
         <label>Precio actual<span>{price ? null : <small>Precio no disponible: ingrésalo manualmente</small>}<input required type="number" min="0.01" step="0.01" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" /></span></label>
-        <label>Moneda<span className="fixed-currency">MXN — Peso mexicano</span></label>
+        <label>Moneda<span className="fixed-currency">{currency === 'GBP' ? 'GBP — Libra esterlina' : 'MXN — Peso mexicano'}</span></label>
         <label>Nombre de variante (opcional)<input value={variantName} onChange={e => setVariantName(e.target.value)} placeholder="Ej. Individual" /></label>
         <label>URL de imagen (opcional)<input type="url" inputMode="url" value={image} onChange={e => setImage(e.target.value)} placeholder="https://…" /></label>
       </div>
@@ -654,33 +659,30 @@ function AddProductPage() {
       <button className="primary-button full-button save-button" type="submit" disabled={isSaving}>{isSaving ? <><span className="spinner" /> Guardando…</> : <>Guardar y rastrear <ArrowRight size={17} /></>}</button>
       <p className="local-disclaimer">No se inventan precios. Las alertas se calculan con el historial disponible; las tiendas aún requieren actualización manual.</p>
       <section className="html-viewer">
-        <button className="html-view-toggle" type="button" aria-expanded={isHtmlVisible} onClick={() => {
-          setIsHtmlVisible(visible => !visible)
-          setHtmlCopyMessage('')
-        }}>Ver HTML</button>
-        {isHtmlVisible && <div className="html-view-content">
-          {productHtml === null
-            ? <p className="html-unavailable">El código HTML de esta página no está disponible</p>
-            : <>
-              {htmlTruncated && <p className="html-truncated">Se muestra el inicio del HTML; el contenido se limitó por seguridad.</p>}
-              <pre className="html-code">{productHtml}</pre>
-              <div className="html-view-actions">
-                <button className="secondary-button" type="button" onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(productHtml)
-                    setHtmlCopyMessage('HTML copiado.')
-                  } catch {
-                    setHtmlCopyMessage('No se pudo copiar el HTML desde este dispositivo.')
-                  }
-                }}>Copiar HTML</button>
-                {htmlCopyMessage && <span className="html-copy-message" role="status">{htmlCopyMessage}</span>}
-                <button className="secondary-button" type="button" onClick={() => {
-                  setIsHtmlVisible(false)
-                  setHtmlCopyMessage('')
-                }}>Ocultar HTML</button>
-              </div>
-            </>}
-        </div>}
+        <button
+          className="html-view-toggle"
+          type="button"
+          aria-expanded={isHtmlVisible}
+          onClick={() => {
+            setIsHtmlVisible(visible => !visible)
+          }}
+        >
+          {isHtmlVisible ? 'Ocultar Inspector Web' : 'Abrir Inspector Web Interactivo'}
+        </button>
+
+        {isHtmlVisible && (
+          <div className="html-view-content">
+            <HtmlVisualInspector
+              html={productHtml}
+              sourceUrl={validUrl}
+              isTruncated={htmlTruncated}
+              onAssignName={(assignedName) => setName(assignedName)}
+              onAssignPrice={(assignedPrice) => setPrice(assignedPrice)}
+              onAssignImage={(assignedImage) => setImage(assignedImage)}
+              onClose={() => setIsHtmlVisible(false)}
+            />
+          </div>
+        )}
       </section>
     </form>}
   </div>

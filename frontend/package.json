@@ -16,6 +16,8 @@
     "@capacitor/android": "^7.4.3",
     "@capacitor/app": "^7.0.2",
     "@capacitor/core": "^7.4.3",
+    "css-tree": "^3.2.1",
+    "dompurify": "^3.4.17",
     "lucide-react": "^1.59.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

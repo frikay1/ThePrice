@@ -53,6 +53,7 @@ export interface ProductLookupResult {
   currency: string
   is_demo: boolean
   notice: string
+  availability?: string | null
   html?: string | null
   html_truncated?: boolean
 }

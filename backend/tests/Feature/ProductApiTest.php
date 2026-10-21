@@ -502,6 +502,38 @@ class ProductApiTest extends TestCase
         $this->assertDatabaseCount('price_histories', 0);
     }
 
+    public function test_requiem_red_lookup_returns_a_nonempty_current_price_and_image(): void
+    {
+        $html = <<<'HTML'
+        <html><body><div class="product_main">
+            <h1>The Requiem Red</h1>
+            <p class="price_color">£22.65</p>
+        </div><div class="item active">
+            <img src="../../media/cache/0d/0a/0d0a7c2c6a4bff1b0c9f.jpeg" />
+        </div></body></html>
+        HTML;
+        $this->mock(PublicIpv4Resolver::class, function ($mock) {
+            $mock->shouldReceive('resolve')->once()->with('books.toscrape.com')->andReturn('93.184.216.34');
+        });
+        Http::fake([
+            'https://books.toscrape.com/catalogue/the-requiem-red_995/index.html' => Http::response($html),
+        ]);
+
+        $response = $this->postJson('/api/products/lookup', [
+            'url' => 'https://books.toscrape.com/catalogue/the-requiem-red_995/index.html',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'The Requiem Red')
+            ->assertJsonPath('data.current_price', '22.65')
+            ->assertJsonPath('data.currency', 'GBP')
+            ->assertJsonPath('data.image', 'https://books.toscrape.com/media/cache/0d/0a/0d0a7c2c6a4bff1b0c9f.jpeg');
+
+        $price = $response->json('data.current_price');
+        $this->assertNotNull($price);
+        $this->assertNotSame('', $price);
+        $this->assertGreaterThan(0, (float) $price);
+        Http::assertSentCount(1);
+    }
+
     public function test_product_lookup_does_not_expose_html_to_unauthenticated_users(): void
     {
         $this->app['auth']->guard('web')->logout();
@@ -613,6 +645,109 @@ class ProductApiTest extends TestCase
 
         $this->assertDatabaseCount('products', 0);
         $this->assertDatabaseCount('price_histories', 0);
+    }
+
+    public function test_amazon_mexico_lookup_extracts_current_offer_not_previous_price(): void
+    {
+        $html = <<<'HTML'
+        <html><head><meta property="og:title" content="Producto Amazon">
+            <meta property="og:image" content="https://m.media-amazon.com/images/I/test.jpg"></head>
+        <body><span id="productTitle">Producto Amazon</span>
+            <div id="corePrice_feature_div"><span class="a-offscreen">MX$ 1,234.50</span></div>
+            <span id="listPrice" class="a-offscreen">$ 1,999.00</span>
+            <div id="availability"><span>En existencia</span></div>
+        </body></html>
+        HTML;
+        $this->mock(PublicIpv4Resolver::class, function ($mock) {
+            $mock->shouldReceive('resolve')->once()->with('www.amazon.com.mx')->andReturn('93.184.216.34');
+        });
+        Http::fake([
+            'https://www.amazon.com.mx/dp/B0ABCDEF12' => Http::response($html),
+        ]);
+
+        $this->postJson('/api/products/lookup', [
+            'url' => 'https://www.amazon.com.mx/dp/B0ABCDEF12',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'Producto Amazon')
+            ->assertJsonPath('data.current_price', '1234.50')
+            ->assertJsonPath('data.currency', 'MXN')
+            ->assertJsonPath('data.image', 'https://m.media-amazon.com/images/I/test.jpg')
+            ->assertJsonPath('data.availability', 'En existencia');
+
+        Http::assertSentCount(1);
+        $this->assertDatabaseCount('products', 0);
+    }
+
+    public function test_product_lookup_does_not_fetch_amazon_us_or_other_sites(): void
+    {
+        $resolver = Mockery::mock(PublicIpv4Resolver::class);
+        $resolver->shouldNotReceive('resolve');
+        $this->app->instance(PublicIpv4Resolver::class, $resolver);
+
+        foreach ([
+            'https://www.amazon.com/dp/B0ABCDEF12',
+            'https://amazon.com.mx.evil.example/dp/B0ABCDEF12',
+        ] as $url) {
+            $this->postJson('/api/products/lookup', ['url' => $url])
+                ->assertUnprocessable()
+                ->assertJsonPath('message', 'Por ahora solo se consultan Books to Scrape y Amazon México.');
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_amazon_lookup_reports_blocked_pages_without_bypassing_them(): void
+    {
+        $this->mock(PublicIpv4Resolver::class, function ($mock) {
+            $mock->shouldReceive('resolve')->once()->with('www.amazon.com.mx')->andReturn('93.184.216.34');
+        });
+        Http::fake([
+            'https://www.amazon.com.mx/dp/B0ABCDEF12' => Http::response('Robot Check', 503),
+        ]);
+
+        $this->postJson('/api/products/lookup', [
+            'url' => 'https://www.amazon.com.mx/dp/B0ABCDEF12',
+        ])->assertStatus(502)
+            ->assertJsonPath('message', 'Amazon no permitió acceder a la página del producto. No se obtuvo un precio.');
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_amazon_lookup_does_not_try_to_bypass_a_captcha_page(): void
+    {
+        $this->mock(PublicIpv4Resolver::class, function ($mock) {
+            $mock->shouldReceive('resolve')->once()->with('www.amazon.com.mx')->andReturn('93.184.216.34');
+        });
+        Http::fake([
+            'https://www.amazon.com.mx/dp/B0ABCDEF12' => Http::response(
+                '<html><body>Robot Check: CAPTCHA</body></html>'
+            ),
+        ]);
+
+        $this->postJson('/api/products/lookup', [
+            'url' => 'https://www.amazon.com.mx/dp/B0ABCDEF12',
+        ])->assertStatus(502)
+            ->assertJsonPath('message', 'Amazon mostró una página de verificación. No se intentó evadirla y no se obtuvo un precio.');
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_amazon_lookup_does_not_use_previous_price_as_current_price(): void
+    {
+        $html = '<html><body><span id="productTitle">Producto sin oferta actual</span>'
+            .'<span id="listPrice" class="a-offscreen">$ 1,999.00</span>'
+            .'<span id="basisPrice" class="a-offscreen">$ 1,999.00</span></body></html>';
+        $this->mock(PublicIpv4Resolver::class, function ($mock) {
+            $mock->shouldReceive('resolve')->once()->with('www.amazon.com.mx')->andReturn('93.184.216.34');
+        });
+        Http::fake([
+            'https://www.amazon.com.mx/dp/B0ABCDEF12' => Http::response($html),
+        ]);
+
+        $this->postJson('/api/products/lookup', [
+            'url' => 'https://www.amazon.com.mx/dp/B0ABCDEF12',
+        ])->assertStatus(502)
+            ->assertJsonPath('message', 'Amazon no proporcionó un precio de venta actual accesible. No se usó el precio anterior, envío ni una mensualidad.');
     }
 
     public function test_product_history_is_returned_in_recorded_order(): void
