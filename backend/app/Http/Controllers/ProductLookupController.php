@@ -25,8 +25,14 @@ class ProductLookupController extends Controller
         }
 
         try {
+            $data = $lookup->lookup($validator->validated()['url']);
+
+            if ($request->user('sanctum') === null) {
+                unset($data['html'], $data['html_truncated']);
+            }
+
             return response()->json([
-                'data' => $lookup->lookup($validator->validated()['url']),
+                'data' => $data,
             ]);
         } catch (ProductLookupException $exception) {
             return response()->json([

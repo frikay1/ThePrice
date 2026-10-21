@@ -14,6 +14,8 @@ class BooksToScrapeLookupService
 
     private const MAX_RESPONSE_BYTES = 2_097_152;
 
+    private const MAX_EXPOSED_HTML_BYTES = 262_144;
+
     public function __construct(private readonly PublicIpv4Resolver $resolver) {}
 
     public function lookup(string $url): array
@@ -57,7 +59,13 @@ class BooksToScrapeLookupService
             throw new ProductLookupException('La página del producto es demasiado grande para procesarla.');
         }
 
-        return $this->parseProductPage($response->body(), $productUrl);
+        $html = $response->body();
+
+        return [
+            ...$this->parseProductPage($html, $productUrl),
+            'html' => mb_strcut($html, 0, self::MAX_EXPOSED_HTML_BYTES, 'UTF-8'),
+            'html_truncated' => strlen($html) > self::MAX_EXPOSED_HTML_BYTES,
+        ];
     }
 
     public function parseProductPage(string $html, string $productUrl): array

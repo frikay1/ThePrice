@@ -1,5 +1,5 @@
 import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bell, Check, ChevronRight, CircleHelp, ExternalLink, Heart, Home, Link2, LogIn, Moon, Plus, Search, Settings as SettingsIcon, ShoppingBag, Sparkles, Sun, Tag, Trash2, TrendingDown, UserRound } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Bell, Check, ChevronRight, CircleHelp, Clock3, ExternalLink, Heart, Home, Link2, LogIn, Moon, Plus, Search, Settings as SettingsIcon, ShoppingBag, Sparkles, Sun, Tag, Trash2, TrendingDown, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { App as CapacitorApp } from '@capacitor/app'
@@ -13,6 +13,7 @@ import type { PriceProduct, PricePoint } from './data/types'
 import { getProductHistory, lookupProduct } from './services/productApi'
 import { detectStore, validateProductUrl } from './services/storeDetection'
 import { readGuestProducts } from './services/guestProducts'
+import { readRecentProductVisits, recordRecentProductVisit } from './services/recentProducts'
 import './App.css'
 
 const formatPrice = (price: number, currency = 'MXN') => {
@@ -92,11 +93,37 @@ function AppShell({ children }: { children: ReactNode }) {
 function HomePage() {
   const { products, isLoading, loadError, reloadProducts, successMessage, dismissSuccess, isGuestMode, guestProductsAvailable, importGuestProducts } = useApp()
   const { user } = useAuth()
+  const recentProductsOwnerId = isGuestMode ? 'guest' : user ? String(user.id) : null
+  const [recentHistoryState, setRecentHistoryState] = useState<{
+    ownerId: string | null
+    visits: ReturnType<typeof readRecentProductVisits>
+    error: string
+  }>({ ownerId: null, visits: [], error: '' })
   const [filter, setFilter] = useState('Todos')
   const [search, setSearch] = useState('')
   const [importNotice, setImportNotice] = useState('')
   const [importing, setImporting] = useState(false)
   const [storeFilter, setStoreFilter] = useState('Todas')
+  useEffect(() => {
+    if (!recentProductsOwnerId) return
+    let active = true
+    void Promise.resolve().then(() => {
+      try {
+        const visits = readRecentProductVisits(recentProductsOwnerId)
+        if (active) setRecentHistoryState({ ownerId: recentProductsOwnerId, visits, error: '' })
+      } catch (error) {
+        if (active) setRecentHistoryState({
+          ownerId: recentProductsOwnerId,
+          visits: [],
+          error: error instanceof Error ? error.message : 'No se pudo leer el historial de productos recientes.',
+        })
+      }
+    })
+    return () => { active = false }
+  }, [recentProductsOwnerId])
+  const recentHistoryMatchesOwner = recentHistoryState.ownerId === recentProductsOwnerId
+  const recentVisits = recentHistoryMatchesOwner ? recentHistoryState.visits : []
+  const recentVisitsError = recentHistoryMatchesOwner ? recentHistoryState.error : ''
   const filterOptions = ['Todos', 'Bajaron', 'Subieron', 'Sin cambios']
   const visibleProducts = products.filter(product => {
     const matchesSearch = `${product.name} ${product.store}`.toLocaleLowerCase('es-MX').includes(search.toLocaleLowerCase('es-MX'))
@@ -106,6 +133,9 @@ function HomePage() {
     const change = product.currentPrice - product.previousPrice
     return filter === 'Todos' || (filter === 'Bajaron' && change < 0) || (filter === 'Subieron' && change > 0) || (filter === 'Sin cambios' && change === 0)
   })
+  const recentProducts = recentVisits
+    .map(visit => ({ visit, product: products.find(item => item.id === visit.productId) }))
+    .filter((entry): entry is { visit: typeof recentVisits[number]; product: PriceProduct } => Boolean(entry.product))
   const drops = products.filter(product => product.previousPrice !== null && product.currentPrice < product.previousPrice).length
   return <div className="page-container">
     <header className="home-header">
@@ -134,6 +164,22 @@ function HomePage() {
       <div className="summary-card"><span>Guardados</span><strong>{products.length}</strong><ShoppingBag size={17} /></div>
       <div className="summary-card"><span>Con bajada</span><strong>{drops}</strong><TrendingDown size={17} /></div>
       <div className="summary-card"><span>Seguimientos activos</span><strong>{products.filter(p => p.alertEnabled).length}</strong><Bell size={17} /></div>
+    </section>
+    <section className="recent-products-section" aria-labelledby="recent-products-heading">
+      <div className="section-heading"><div><h2 id="recent-products-heading">Lo último que exploraste</h2><span>Hasta 5 productos visitados recientemente</span></div><Clock3 size={19} aria-hidden="true" /></div>
+      {recentVisitsError
+        ? <div className="form-message error-message" role="alert">{recentVisitsError}</div>
+        : isLoading
+          ? <div className="recent-products-empty" role="status">Cargando historial…</div>
+          : recentProducts.length === 0
+            ? <div className="recent-products-empty">Todavía no has explorado productos</div>
+            : <div className="recent-products-list">{recentProducts.map(({ visit, product }) =>
+              <Link to={`/producto/${product.id}`} className="recent-product-item" key={product.id}>
+                <span className="recent-product-info"><strong>{product.name}</strong><span>{product.store}</span></span>
+                <time dateTime={visit.visitedAt}>{new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(visit.visitedAt))}</time>
+                <ChevronRight size={17} aria-hidden="true" />
+              </Link>,
+            )}</div>}
     </section>
     <div className="section-heading"><div><h2>Mis productos</h2><span>{products.length} guardados</span></div><Link to="/nuevo" className="small-add"><Plus size={17} /> Agregar</Link></div>
     {successMessage && <div className="form-message info-message api-status-message" role="status">{successMessage}<button className="status-dismiss" onClick={dismissSuccess} aria-label="Cerrar mensaje">×</button></div>}
@@ -196,8 +242,12 @@ function ChartPanel({ history, currency }: { history: PricePoint[]; currency: st
 function ProductDetailPage() {
   const { id } = useParams()
   const { products, isLoading, updateTarget, updateProduct, updateProductHistory, refreshProduct, registerManualPrice, updateVariant, deleteProduct, successMessage, dismissSuccess, isGuestMode, toggleAlerts } = useApp()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const product = products.find(item => item.id === id)
+  const productId = product?.id
+  const recentProductsOwnerId = isGuestMode ? 'guest' : user ? String(user.id) : null
+  const [recentVisitError, setRecentVisitError] = useState('')
   const [editingTarget, setEditingTarget] = useState(false)
   const [target, setTarget] = useState('')
   const [notice, setNotice] = useState('')
@@ -221,6 +271,17 @@ function ProductDetailPage() {
   const [manualPrice, setManualPrice] = useState('')
   const [isSavingManualPrice, setIsSavingManualPrice] = useState(false)
   const [manualRecordedAt, setManualRecordedAt] = useState<string | null>(null)
+  useEffect(() => {
+    if (!productId || !recentProductsOwnerId) return
+    void Promise.resolve()
+      .then(() => {
+        recordRecentProductVisit(recentProductsOwnerId, productId)
+        setRecentVisitError('')
+      })
+      .catch(error => setRecentVisitError(
+        error instanceof Error ? error.message : 'No se pudo guardar el historial de productos recientes.',
+      ))
+  }, [productId, recentProductsOwnerId])
   useEffect(() => {
     if (!id) return
     if (isGuestMode) {
@@ -361,6 +422,7 @@ function ProductDetailPage() {
     }
   }
   return <div className="page-container detail-page">
+    {recentVisitError && <div className="form-message error-message" role="alert">{recentVisitError}</div>}
     <div className="detail-hero"><ProductImage src={product.image} name={product.name} className="detail-product-image" /><div className="detail-product-copy"><span className="store-name">{product.store}</span><h1>{product.name}{product.variantName ? ` · ${product.variantName}` : ''}</h1><div className="detail-price">{formatPrice(product.currentPrice, product.currency)} <TrendBadge product={product} /></div><TargetAlertBadge product={product} /><span className="previous-price">{product.previousPrice === null ? 'Aún no hay un precio anterior registrado' : `Precio anterior: ${formatPrice(product.previousPrice, product.currency)}`}</span></div></div>
     <a className="store-link" href={product.sourceUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} /> Ver en tienda <ArrowRight size={16} /></a>
     {!isEditingDetails
@@ -459,6 +521,10 @@ function AddProductPage() {
   const [frequency, setFrequency] = useState('Diaria')
   const [isSaving, setIsSaving] = useState(false)
   const [hasLookupData, setHasLookupData] = useState(false)
+  const [productHtml, setProductHtml] = useState<string | null>(null)
+  const [isHtmlVisible, setIsHtmlVisible] = useState(false)
+  const [htmlCopyMessage, setHtmlCopyMessage] = useState('')
+  const [htmlTruncated, setHtmlTruncated] = useState(false)
 
   const updateUrl = (value: string) => {
     setUrl(value)
@@ -466,6 +532,10 @@ function AddProductPage() {
     setError('')
     setNotice('')
     setHasLookupData(false)
+    setProductHtml(null)
+    setIsHtmlVisible(false)
+    setHtmlCopyMessage('')
+    setHtmlTruncated(false)
     setName('')
     setStore('')
     setPrice('')
@@ -484,6 +554,10 @@ function AddProductPage() {
   }
   const fetchPreview = async () => {
     setError(''); setNotice('')
+    setProductHtml(null)
+    setIsHtmlVisible(false)
+    setHtmlCopyMessage('')
+    setHtmlTruncated(false)
     const validatedUrl = validateProductUrl(url)
     if (!validatedUrl.valid) { setError(validatedUrl.message); return }
     const host = new URL(validatedUrl.url).hostname.toLowerCase()
@@ -496,6 +570,8 @@ function AddProductPage() {
         setName(result.name)
         setStore(result.store)
         setImage(result.image ?? '')
+        setProductHtml(result.html ?? null)
+        setHtmlTruncated(result.html_truncated ?? false)
         setNotice(result.notice)
       } catch (caught) {
         setNotice(caught instanceof Error ? caught.message : 'Precio no disponible. Completa los datos manualmente.')
@@ -577,6 +653,35 @@ function AddProductPage() {
       {error && <p className="form-message error-message" role="alert">{error}</p>}
       <button className="primary-button full-button save-button" type="submit" disabled={isSaving}>{isSaving ? <><span className="spinner" /> Guardando…</> : <>Guardar y rastrear <ArrowRight size={17} /></>}</button>
       <p className="local-disclaimer">No se inventan precios. Las alertas se calculan con el historial disponible; las tiendas aún requieren actualización manual.</p>
+      <section className="html-viewer">
+        <button className="html-view-toggle" type="button" aria-expanded={isHtmlVisible} onClick={() => {
+          setIsHtmlVisible(visible => !visible)
+          setHtmlCopyMessage('')
+        }}>Ver HTML</button>
+        {isHtmlVisible && <div className="html-view-content">
+          {productHtml === null
+            ? <p className="html-unavailable">El código HTML de esta página no está disponible</p>
+            : <>
+              {htmlTruncated && <p className="html-truncated">Se muestra el inicio del HTML; el contenido se limitó por seguridad.</p>}
+              <pre className="html-code">{productHtml}</pre>
+              <div className="html-view-actions">
+                <button className="secondary-button" type="button" onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(productHtml)
+                    setHtmlCopyMessage('HTML copiado.')
+                  } catch {
+                    setHtmlCopyMessage('No se pudo copiar el HTML desde este dispositivo.')
+                  }
+                }}>Copiar HTML</button>
+                {htmlCopyMessage && <span className="html-copy-message" role="status">{htmlCopyMessage}</span>}
+                <button className="secondary-button" type="button" onClick={() => {
+                  setIsHtmlVisible(false)
+                  setHtmlCopyMessage('')
+                }}>Ocultar HTML</button>
+              </div>
+            </>}
+        </div>}
+      </section>
     </form>}
   </div>
 }

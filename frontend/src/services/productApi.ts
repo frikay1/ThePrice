@@ -53,6 +53,8 @@ export interface ProductLookupResult {
   currency: string
   is_demo: boolean
   notice: string
+  html?: string | null
+  html_truncated?: boolean
 }
 
 export interface ProductRefreshResult {

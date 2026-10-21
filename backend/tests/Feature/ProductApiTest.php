@@ -493,11 +493,56 @@ class ProductApiTest extends TestCase
             ->assertJsonPath('data.current_price', '51.77')
             ->assertJsonPath('data.currency', 'GBP')
             ->assertJsonPath('data.image', 'https://books.toscrape.com/media/cache/2c/da/2cdad67c44b002e7ead0cc35693c0e5b.jpg')
-            ->assertJsonPath('data.is_demo', true);
+            ->assertJsonPath('data.is_demo', true)
+            ->assertJsonPath('data.html', $html)
+            ->assertJsonPath('data.html_truncated', false);
 
         Http::assertSentCount(1);
         $this->assertDatabaseCount('products', 0);
         $this->assertDatabaseCount('price_histories', 0);
+    }
+
+    public function test_product_lookup_does_not_expose_html_to_unauthenticated_users(): void
+    {
+        $this->app['auth']->guard('web')->logout();
+        $this->app['auth']->forgetGuards();
+        $this->mock(BooksToScrapeLookupService::class, function ($mock) {
+            $mock->shouldReceive('lookup')->once()->andReturn([
+                'name' => 'A Light in the Attic',
+                'html' => '<html>private response</html>',
+                'html_truncated' => false,
+            ]);
+        });
+
+        $this->postJson('/api/products/lookup', [
+            'url' => 'https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html',
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'A Light in the Attic')
+            ->assertJsonMissingPath('data.html')
+            ->assertJsonMissingPath('data.html_truncated');
+    }
+
+    public function test_product_lookup_limits_the_html_response_size(): void
+    {
+        $html = '<html><body><div class="product_main"><h1>A book</h1><p class="price_color">£51.77</p></div><p>'
+            .str_repeat('a', 262_200)
+            .'</p></body></html>';
+
+        $this->mock(PublicIpv4Resolver::class, function ($mock) {
+            $mock->shouldReceive('resolve')->once()->with('books.toscrape.com')->andReturn('93.184.216.34');
+        });
+        Http::fake([
+            'https://books.toscrape.com/catalogue/a-book_1/index.html' => Http::response($html),
+        ]);
+
+        $response = $this->postJson('/api/products/lookup', [
+            'url' => 'https://books.toscrape.com/catalogue/a-book_1/index.html',
+        ])->assertOk()
+            ->assertJsonPath('data.html_truncated', true);
+
+        $this->assertLessThanOrEqual(262_144, strlen($response->json('data.html')));
+        $this->assertStringStartsWith('<html>', $response->json('data.html'));
+        Http::assertSentCount(1);
     }
 
     public function test_product_lookup_rejects_urls_outside_the_exact_demo_product_host(): void
