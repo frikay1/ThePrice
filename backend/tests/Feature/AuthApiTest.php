@@ -2,12 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\EnsureStatefulWebSessionForProductRequests;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\BooksToScrapeLookupService;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 class AuthApiTest extends TestCase
@@ -160,6 +165,63 @@ class AuthApiTest extends TestCase
             'user_id' => $user->id,
         ]);
         $this->assertDatabaseCount('price_histories', 1);
+    }
+
+    public function test_mobile_bearer_user_can_lookup_product_and_html_without_session_csrf(): void
+    {
+        $user = User::factory()->create();
+        $token = $user->createToken('android')->plainTextToken;
+        $this->mock(BooksToScrapeLookupService::class, function ($mock) {
+            $mock->shouldReceive('lookup')->once()->with(
+                'https://books.toscrape.com/catalogue/a-book_1/index.html'
+            )->andReturn([
+                'name' => 'A book',
+                'store' => 'Books to Scrape',
+                'url' => 'https://books.toscrape.com/catalogue/a-book_1/index.html',
+                'image' => null,
+                'current_price' => '51.77',
+                'currency' => 'GBP',
+                'is_demo' => true,
+                'notice' => 'Demo',
+                'html' => '<html><body>A book</body></html>',
+                'html_truncated' => false,
+            ]);
+        });
+
+        $this->withHeaders(['Origin' => 'https://localhost'])
+            ->withToken($token)
+            ->postJson('/api/products/lookup', [
+                'url' => 'https://books.toscrape.com/catalogue/a-book_1/index.html',
+            ])->assertOk()
+            ->assertJsonPath('data.name', 'A book')
+            ->assertJsonPath('data.html', '<html><body>A book</body></html>')
+            ->assertJsonPath('data.html_truncated', false);
+
+        $this->assertDatabaseCount('products', 0);
+    }
+
+    public function test_mobile_origin_bypasses_stateful_web_middleware_but_browser_origin_uses_it(): void
+    {
+        $statefulMiddleware = $this->mock(EnsureFrontendRequestsAreStateful::class);
+        $middleware = $this->app->make(EnsureStatefulWebSessionForProductRequests::class);
+        $next = fn () => new Response;
+
+        $statefulMiddleware->shouldNotReceive('handle');
+        $mobileRequest = Request::create('/api/products/lookup', 'POST', [], [], [], [
+            'HTTP_ORIGIN' => 'https://localhost',
+        ]);
+        $this->assertSame(200, $middleware->handle($mobileRequest, $next)->getStatusCode());
+
+        $this->app->forgetInstance(EnsureFrontendRequestsAreStateful::class);
+        $statefulMiddleware = $this->mock(EnsureFrontendRequestsAreStateful::class);
+        $statefulMiddleware->shouldReceive('handle')->once()->andReturnUsing(
+            fn (Request $request, $next) => $next($request)
+        );
+        $middleware = $this->app->make(EnsureStatefulWebSessionForProductRequests::class);
+        $browserRequest = Request::create('/api/products/lookup', 'POST', [], [], [], [
+            'HTTP_ORIGIN' => 'http://localhost:5173',
+        ]);
+        $this->assertSame(200, $middleware->handle($browserRequest, $next)->getStatusCode());
     }
 
     public function test_mobile_product_creation_without_bearer_token_returns_unauthorized(): void

@@ -486,7 +486,7 @@ class ProductApiTest extends TestCase
             'https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html' => Http::response($html),
         ]);
 
-        $this->postJson('/api/products/lookup', [
+        $this->withHeader('Origin', 'http://localhost:5173')->postJson('/api/products/lookup', [
             'url' => 'https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html',
         ])->assertOk()
             ->assertJsonPath('data.name', 'A Light in the Attic')

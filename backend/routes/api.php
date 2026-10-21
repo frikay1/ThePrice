@@ -9,7 +9,11 @@ use App\Http\Middleware\EnsureStatefulWebSessionForProductRequests;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
-Route::post('/products/lookup', ProductLookupController::class);
+Route::withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+    ->middleware(EnsureStatefulWebSessionForProductRequests::class)
+    ->group(function () {
+        Route::post('/products/lookup', ProductLookupController::class);
+    });
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
